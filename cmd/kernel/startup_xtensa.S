@@ -59,4 +59,4 @@ windmills_trap_exit:
 
 .globl windmills_trap_return
 windmills_trap_return:
-	j kmain
+	rfi 1

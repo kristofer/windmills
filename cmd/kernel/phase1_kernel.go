@@ -77,11 +77,13 @@ func timerInit() {
 
 func timerInterrupt() {
 	state := tickLock.lock()
+	var tick uint64
 	if timerConfigured && timerIRQEnabled {
 		monotonicTickCount++
+		tick = monotonicTickCount
 	}
 	tickLock.unlock(state)
-	schedulerOnTick(monotonicTick())
+	schedulerOnTick(tick)
 }
 
 func monotonicTick() uint64 {
@@ -114,6 +116,7 @@ func schedulerRun() {
 }
 
 func schedulerYield() {
+	// Cooperative scheduler entrypoint for future trap/syscall-driven yields.
 	if bootThread.state == threadRunning {
 		bootThread.state = threadRunnable
 	}
