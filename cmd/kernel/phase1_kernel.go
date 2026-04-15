@@ -54,16 +54,19 @@ func irqRestore(state irqState) {
 
 func (l *spinlock) lock() irqState {
 	state := irqDisableSave()
-	if !atomic.CompareAndSwapUint32(&l.locked, 0, 1) {
-		panic("spinlock: already locked")
+	for !atomic.CompareAndSwapUint32(&l.locked, 0, 1) {
+		if interruptDisableN > 1 {
+			panic("spinlock: recursive lock")
+		}
 	}
 	return state
 }
 
 func (l *spinlock) unlock(state irqState) {
-	if !atomic.CompareAndSwapUint32(&l.locked, 1, 0) {
+	if atomic.LoadUint32(&l.locked) == 0 {
 		panic("spinlock: not locked")
 	}
+	atomic.StoreUint32(&l.locked, 0)
 	irqRestore(state)
 }
 
@@ -82,9 +85,8 @@ func timerInterrupt() {
 		return
 	}
 	monotonicTickCount++
-	tick := monotonicTickCount
 	tickLock.unlock(state)
-	schedulerOnTick(tick)
+	schedulerOnTick()
 }
 
 func monotonicTick() uint64 {
@@ -123,8 +125,7 @@ func schedulerYield() {
 	}
 }
 
-func schedulerOnTick(tick uint64) {
-	_ = tick
+func schedulerOnTick() {
 	// Cooperative scheduler skeleton: timer currently tracks monotonic time only.
 }
 

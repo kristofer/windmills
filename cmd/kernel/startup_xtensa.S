@@ -9,13 +9,13 @@ _start:
 
 .globl windmills_vector_table
 windmills_vector_table:
-	j windmills_trap_entry
-	j windmills_trap_entry
-	j windmills_trap_entry
-	j windmills_trap_entry
-	j windmills_trap_entry
-	j windmills_trap_entry
-	j windmills_trap_entry
+	j windmills_trap_entry // reset
+	j windmills_trap_entry // level 1 interrupt
+	j windmills_trap_entry // level 2 interrupt
+	j windmills_trap_entry // level 3 interrupt
+	j windmills_trap_entry // level 4 interrupt
+	j windmills_trap_entry // level 5 interrupt
+	j windmills_trap_entry // double exception
 
 .globl windmills_reset_vector
 windmills_reset_vector:
