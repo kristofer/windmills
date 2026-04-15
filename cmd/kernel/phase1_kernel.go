@@ -123,7 +123,8 @@ func schedulerYield() {
 	}
 }
 
-func schedulerOnTick(uint64) {
+func schedulerOnTick(tick uint64) {
+	_ = tick
 	// Cooperative scheduler skeleton: timer currently tracks monotonic time only.
 }
 

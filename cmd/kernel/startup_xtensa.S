@@ -47,12 +47,15 @@ windmills_double_exception_vector:
 
 .globl windmills_trap_entry
 windmills_trap_entry:
+	j windmills_trap_return
 
 .globl windmills_trap_dispatch
 windmills_trap_dispatch:
+	j windmills_trap_return
 
 .globl windmills_trap_exit
 windmills_trap_exit:
+	j windmills_trap_return
 
 .globl windmills_trap_return
 windmills_trap_return:
