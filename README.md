@@ -12,6 +12,7 @@ until the system is functionally comparable to xv6.
 - Linker layout: `targets/esp32s3-windmills.ld`
 - Startup stubs: `cmd/kernel/startup_xtensa.S`
 - Kernel bring-up entrypoint and UART diagnostics: `cmd/kernel/main_tinygo.go`
+- UART MMIO constants use ESP32-S3 TRM `UART0` base mapping (`0x60000000`)
 - Deterministic build entrypoint: `make firmware` (uses `SOURCE_DATE_EPOCH`, `TZ=UTC`, `LC_ALL=C`)
 
 ## Design constraints
