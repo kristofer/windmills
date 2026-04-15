@@ -6,6 +6,14 @@ This repository currently defines the high-level implementation plan and system
 specification that starts from a minimal bootable kernel and grows in phases
 until the system is functionally comparable to xv6.
 
+## Phase 0 baseline (implemented)
+
+- TinyGo target config: `/home/runner/work/windmills/windmills/targets/esp32s3-windmills.json`
+- Linker layout: `/home/runner/work/windmills/windmills/targets/esp32s3-windmills.ld`
+- Startup stubs: `/home/runner/work/windmills/windmills/cmd/kernel/startup_xtensa.S`
+- Kernel bring-up entrypoint and UART diagnostics: `/home/runner/work/windmills/windmills/cmd/kernel/main_tinygo.go`
+- Deterministic build entrypoint: `make firmware` (uses `SOURCE_DATE_EPOCH`, `TZ=UTC`, `LC_ALL=C`)
+
 ## Design constraints
 
 - Language: TinyGo + small amounts of Xtensa assembly (no C).

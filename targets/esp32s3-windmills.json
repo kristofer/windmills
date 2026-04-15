@@ -1,0 +1,9 @@
+{
+  "inherits": ["esp32s3"],
+  "build-tags": ["esp32s3"],
+  "ldflags": ["-T", "targets/esp32s3-windmills.ld"],
+  "scheduler": "none",
+  "gc": "none",
+  "panic-strategy": "trap",
+  "serial": "uart"
+}
