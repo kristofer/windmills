@@ -61,3 +61,18 @@ func TestSchedulerRunsSingleKernelThread(t *testing.T) {
 		t.Fatalf("boot thread state = %v, want %v", bootThread.state, threadExited)
 	}
 }
+
+func TestSchedulerYieldTransitionsRunningToRunnable(t *testing.T) {
+	resetPhase1ForTest()
+	bootThread = kernelThread{
+		name:  "kthread0",
+		entry: func() {},
+		state: threadRunning,
+	}
+
+	schedulerYield()
+
+	if bootThread.state != threadRunnable {
+		t.Fatalf("boot thread state = %v, want %v", bootThread.state, threadRunnable)
+	}
+}

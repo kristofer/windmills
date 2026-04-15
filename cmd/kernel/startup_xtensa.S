@@ -59,4 +59,5 @@ windmills_trap_exit:
 
 .globl windmills_trap_return
 windmills_trap_return:
+	// Phase 1 funnels vectors through one trap path; return via level-1 skeleton.
 	rfi 1

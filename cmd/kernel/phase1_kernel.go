@@ -77,11 +77,12 @@ func timerInit() {
 
 func timerInterrupt() {
 	state := tickLock.lock()
-	var tick uint64
-	if timerConfigured && timerIRQEnabled {
-		monotonicTickCount++
-		tick = monotonicTickCount
+	if !timerConfigured || !timerIRQEnabled {
+		tickLock.unlock(state)
+		return
 	}
+	monotonicTickCount++
+	tick := monotonicTickCount
 	tickLock.unlock(state)
 	schedulerOnTick(tick)
 }
