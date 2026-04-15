@@ -5,11 +5,10 @@ package main
 import "unsafe"
 
 const (
-	uart0Base       = uintptr(0x60000000)
-	uartFifoOffset  = uintptr(0x00)
-	uartStatus      = uintptr(0x1C)
-	uartTxFifoMask  = uint32(0xFF) << 16
-	uartTxFifoShift = uint32(16)
+	uart0Base      = uintptr(0x60000000)
+	uartFifoOffset = uintptr(0x00)
+	uartStatus     = uintptr(0x1C)
+	uartTxFifoMask = uint32(0xFF0000)
 )
 
 var bootBanner = "windmills: phase0 boot\r\n"
@@ -39,7 +38,7 @@ func uartWriteString(s string) {
 func uartWriteByte(b byte) {
 	for {
 		status := *(*uint32)(unsafe.Pointer(uart0Base + uartStatus))
-		if ((status & uartTxFifoMask) >> uartTxFifoShift) < 127 {
+		if ((status & uartTxFifoMask) >> 16) < 127 {
 			break
 		}
 	}
