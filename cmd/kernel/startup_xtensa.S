@@ -4,7 +4,9 @@
 
 .globl _start
 _start:
-j kmain
+	// Stack setup is intentionally deferred to TinyGo/ROM bring-up for this
+	// minimal Phase 0 stub. This file only provides a deterministic entry symbol.
+	j kmain
 
 .globl windmills_vector_stub
 windmills_vector_stub:
