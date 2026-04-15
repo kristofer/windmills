@@ -20,8 +20,15 @@ func main() {
 //export kmain
 func kmain() {
 	uartWriteString(bootBanner)
+	uartWriteString("windmills: phase1 init\r\n")
+	phase1Init(kernelThread0)
+	schedulerRun()
 	uartWriteString("windmills: entering halt loop\r\n")
 	halt()
+}
+
+func kernelThread0() {
+	uartWriteString("windmills: kthread0 ran\r\n")
 }
 
 func halt() {
