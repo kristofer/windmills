@@ -1,11 +1,13 @@
 package main
 
+import "sync/atomic"
+
 type irqState struct {
 	enabled bool
 }
 
 type spinlock struct {
-	locked bool
+	locked uint32
 }
 
 type threadState uint8
@@ -52,18 +54,16 @@ func irqRestore(state irqState) {
 
 func (l *spinlock) lock() irqState {
 	state := irqDisableSave()
-	if l.locked {
+	if !atomic.CompareAndSwapUint32(&l.locked, 0, 1) {
 		panic("spinlock: already locked")
 	}
-	l.locked = true
 	return state
 }
 
 func (l *spinlock) unlock(state irqState) {
-	if !l.locked {
+	if !atomic.CompareAndSwapUint32(&l.locked, 1, 0) {
 		panic("spinlock: not locked")
 	}
-	l.locked = false
 	irqRestore(state)
 }
 

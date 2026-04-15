@@ -9,13 +9,13 @@ _start:
 
 .globl windmills_vector_table
 windmills_vector_table:
-	j windmills_reset_vector
-	j windmills_level1_vector
-	j windmills_level2_vector
-	j windmills_level3_vector
-	j windmills_level4_vector
-	j windmills_level5_vector
-	j windmills_double_exception_vector
+	j windmills_trap_entry
+	j windmills_trap_entry
+	j windmills_trap_entry
+	j windmills_trap_entry
+	j windmills_trap_entry
+	j windmills_trap_entry
+	j windmills_trap_entry
 
 .globl windmills_reset_vector
 windmills_reset_vector:
