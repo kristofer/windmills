@@ -54,10 +54,10 @@ func irqRestore(state irqState) {
 
 func (l *spinlock) lock() irqState {
 	state := irqDisableSave()
+	if interruptDisableN > 1 && atomic.LoadUint32(&l.locked) != 0 {
+		panic("spinlock: recursive lock")
+	}
 	for !atomic.CompareAndSwapUint32(&l.locked, 0, 1) {
-		if interruptDisableN > 1 {
-			panic("spinlock: recursive lock")
-		}
 	}
 	return state
 }

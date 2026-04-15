@@ -17,34 +17,6 @@ windmills_vector_table:
 	j windmills_trap_entry // level 5 interrupt
 	j windmills_trap_entry // double exception
 
-.globl windmills_reset_vector
-windmills_reset_vector:
-	j windmills_trap_entry
-
-.globl windmills_level1_vector
-windmills_level1_vector:
-	j windmills_trap_entry
-
-.globl windmills_level2_vector
-windmills_level2_vector:
-	j windmills_trap_entry
-
-.globl windmills_level3_vector
-windmills_level3_vector:
-	j windmills_trap_entry
-
-.globl windmills_level4_vector
-windmills_level4_vector:
-	j windmills_trap_entry
-
-.globl windmills_level5_vector
-windmills_level5_vector:
-	j windmills_trap_entry
-
-.globl windmills_double_exception_vector
-windmills_double_exception_vector:
-	j windmills_trap_entry
-
 .globl windmills_trap_entry
 windmills_trap_entry:
 	j windmills_trap_return
