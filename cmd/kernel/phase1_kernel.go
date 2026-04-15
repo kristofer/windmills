@@ -93,7 +93,7 @@ func monotonicTick() uint64 {
 
 func schedulerInit(entry func()) {
 	if entry == nil {
-		entry = func() {}
+		panic("scheduler: nil entry")
 	}
 	bootThread = kernelThread{
 		name:  "kthread0",

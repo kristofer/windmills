@@ -11,18 +11,18 @@ This project targets an ESP32-S3 board connected over USB.
 ## Build firmware
 
 ```bash
-cd /home/runner/work/windmills/windmills
+cd <path-to-windmills>
 make firmware
 ```
 
-This produces `/home/runner/work/windmills/windmills/build/windmills.elf`.
+This produces `build/windmills.elf`.
 
 ## Flash to board
 
 Use your board's serial device (example: `/dev/ttyACM0`):
 
 ```bash
-esptool.py --chip esp32s3 --port /dev/ttyACM0 --baud 921600 --before default_reset --after hard_reset write_flash 0x0 /home/runner/work/windmills/windmills/build/windmills.elf
+esptool.py --chip esp32s3 --port /dev/ttyACM0 --baud 921600 --before default_reset --after hard_reset write_flash 0x0 build/windmills.elf
 ```
 
 ## Observe serial output
