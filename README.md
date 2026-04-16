@@ -34,6 +34,25 @@ Host tests (`go test ./...`) validate the core skeleton behavior:
 
 Hardware bring-up and USB flashing steps are documented in `develop.md`.
 
+## Phase 2 physical memory ownership (implemented)
+
+- Physical memory map with reserved ROM/IRAM/peripheral ranges and DRAM ownership:
+  `cmd/kernel/phase2_memory.go`
+- 4 KiB page-frame allocator over an 8 MiB DRAM window with configurable base
+  address: `cmd/kernel/phase2_memory.go`
+- Strict early boot allocator reserved to early init and permanently disabled
+  after memory ownership setup: `cmd/kernel/phase2_memory.go`
+- Safety invariants in allocator paths to prevent returning reserved regions:
+  `cmd/kernel/phase2_memory.go`
+
+### Phase 2 test strategy
+
+Host tests (`go test ./...`) validate:
+
+- memory map initialization and phase2 boot allocator disable gate
+- boot allocator permanent-disable behavior
+- page allocator never returns reserved regions and honors configurable DRAM base
+
 ## Design constraints
 
 - Language: TinyGo + small amounts of Xtensa assembly (no C).

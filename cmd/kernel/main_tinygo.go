@@ -22,6 +22,8 @@ func kmain() {
 	uartWriteString(bootBanner)
 	uartWriteString("windmills: phase1 init\r\n")
 	phase1Init(kernelThread0)
+	uartWriteString("windmills: phase2 init\r\n")
+	phase2Init()
 	schedulerRun()
 	uartWriteString("windmills: entering halt loop\r\n")
 	halt()
