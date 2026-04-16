@@ -189,7 +189,7 @@ func freePage(address uintptr) bool {
 	if address%pageSizeBytes != 0 {
 		return false
 	}
-	if !isUsableDRAMAddress(address) || isReservedAddress(address) {
+	if !isUsableDRAMAddress(address) {
 		return false
 	}
 	frame := uint32((address - physicalMemoryBase) / pageSizeBytes)
