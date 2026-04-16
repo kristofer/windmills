@@ -42,3 +42,15 @@ Expected Phase 1 boot messages:
 - Trap/vector symbols are linked (`windmills_vector_table`, `windmills_trap_entry`, `windmills_trap_exit`).
 - Timer interrupt path increments the monotonic tick counter.
 - Cooperative scheduler executes `kthread0` exactly once.
+
+## Current Phase 1 expected board behavior
+
+- Yes: this should boot on ESP32-S3 and run the single-thread Phase 1 path.
+- Expected serial output after reset:
+  - `windmills: phase0 boot`
+  - `windmills: phase1 init`
+  - `windmills: kthread0 ran`
+  - `windmills: entering halt loop`
+- After printing the above, the kernel intentionally stays in the halt loop.
+- Current limitation: timer/trap plumbing is still skeleton-level; this phase does
+  not yet provide full preemptive ISR-driven scheduling behavior.
