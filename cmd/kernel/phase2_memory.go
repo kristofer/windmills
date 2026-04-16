@@ -1,11 +1,11 @@
 package main
 
 const (
-	pageSizeBytes            = uintptr(4 * 1024)
-	physicalMemorySizeBytes  = uintptr(8 * 1024 * 1024)
-	bootAllocatorReserveSize = uintptr(64 * 1024)
-	pageFrameCount           = physicalMemorySizeBytes / pageSizeBytes
-	pageFrameBitmapBytes     = pageFrameCount / 8
+	pageSizeBytes                   = uintptr(4 * 1024)
+	physicalMemorySizeBytes         = uintptr(8 * 1024 * 1024)
+	bootAllocatorReserveSize        = uintptr(64 * 1024)
+	pageFrameCount           uint32 = (8 * 1024 * 1024) / (4 * 1024)
+	pageFrameBitmapBytes            = ((8 * 1024 * 1024) / (4 * 1024)) / 8
 
 	// ESP32-S3 fixed memory-mapped hardware regions.
 	romStart        = uintptr(0x40000000)
@@ -49,6 +49,7 @@ var (
 	bootAllocatorEnd                 uintptr
 
 	pageFrameBitmap [pageFrameBitmapBytes]uint8
+	nextFreeFrame   uint32
 )
 
 func addMemoryRegion(start, end uintptr, kind memoryRegionKind, reserved bool) {
@@ -117,6 +118,9 @@ func bootAllocatorDisable() {
 }
 
 func alignUp(value, alignment uintptr) uintptr {
+	if alignment == 0 || (alignment&(alignment-1)) != 0 {
+		panic("alignUp: alignment must be power of two")
+	}
 	mask := alignment - 1
 	return (value + mask) &^ mask
 }
@@ -157,8 +161,9 @@ func pageAllocatorInit(base uintptr) {
 	for i := range pageFrameBitmap {
 		pageFrameBitmap[i] = 0xFF
 	}
+	nextFreeFrame = 0
 
-	for frame := uint32(0); frame < uint32(pageFrameCount); frame++ {
+	for frame := uint32(0); frame < pageFrameCount; frame++ {
 		address := base + uintptr(frame)*pageSizeBytes
 		if isUsableDRAMAddress(address) {
 			bitmapSetFree(frame)
@@ -167,7 +172,8 @@ func pageAllocatorInit(base uintptr) {
 }
 
 func allocPage() (uintptr, bool) {
-	for frame := uint32(0); frame < uint32(pageFrameCount); frame++ {
+	for scanned := uint32(0); scanned < pageFrameCount; scanned++ {
+		frame := (nextFreeFrame + scanned) % pageFrameCount
 		if bitmapIsUsed(frame) {
 			continue
 		}
@@ -177,6 +183,7 @@ func allocPage() (uintptr, bool) {
 			continue
 		}
 		bitmapSetUsed(frame)
+		nextFreeFrame = (frame + 1) % pageFrameCount
 		return address, true
 	}
 	return 0, false
@@ -197,6 +204,9 @@ func freePage(address uintptr) bool {
 		return false
 	}
 	bitmapSetFree(frame)
+	if frame < nextFreeFrame {
+		nextFreeFrame = frame
+	}
 	return true
 }
 

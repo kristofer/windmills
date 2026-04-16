@@ -9,6 +9,7 @@ func resetPhase2ForTest() {
 	bootAllocatorPermanentlyDisabled = false
 	bootAllocatorCursor = 0
 	bootAllocatorEnd = 0
+	nextFreeFrame = 0
 	for i := range pageFrameBitmap {
 		pageFrameBitmap[i] = 0
 	}
