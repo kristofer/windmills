@@ -6,6 +6,17 @@ const (
 	bootAllocatorReserveSize = uintptr(64 * 1024)
 	pageFrameCount           = physicalMemorySizeBytes / pageSizeBytes
 	pageFrameBitmapBytes     = pageFrameCount / 8
+
+	// ESP32-S3 fixed memory-mapped hardware regions.
+	romStart        = uintptr(0x40000000)
+	romEnd          = uintptr(0x40080000)
+	iramStart       = uintptr(0x40370000)
+	iramEnd         = uintptr(0x403E0000)
+	peripheralStart = uintptr(0x60000000)
+	peripheralEnd   = uintptr(0x61000000)
+
+	// ESP32-S3 DRAM base used for host-model defaults; this value remains configurable.
+	defaultPhysicalMemoryBase = uintptr(0x3FC80000)
 )
 
 type memoryRegionKind uint8
@@ -27,7 +38,7 @@ type memoryRegion struct {
 const maxMemoryRegions = 8
 
 var (
-	physicalMemoryBase uintptr = 0x3FC80000
+	physicalMemoryBase uintptr = defaultPhysicalMemoryBase
 
 	regionTable      [maxMemoryRegions]memoryRegion
 	regionTableCount uint8
@@ -59,9 +70,9 @@ func addMemoryRegion(start, end uintptr, kind memoryRegionKind, reserved bool) {
 func buildMemoryMap(base uintptr) {
 	regionTableCount = 0
 
-	addMemoryRegion(0x40000000, 0x40080000, regionROM, true)
-	addMemoryRegion(0x40370000, 0x403E0000, regionIRAM, true)
-	addMemoryRegion(0x60000000, 0x61000000, regionPeripheral, true)
+	addMemoryRegion(romStart, romEnd, regionROM, true)
+	addMemoryRegion(iramStart, iramEnd, regionIRAM, true)
+	addMemoryRegion(peripheralStart, peripheralEnd, regionPeripheral, true)
 
 	addMemoryRegion(base, base+bootAllocatorReserveSize, regionDRAM, true)
 	addMemoryRegion(base+bootAllocatorReserveSize, base+physicalMemorySizeBytes, regionDRAM, false)
@@ -71,25 +82,24 @@ func addressInRegion(address uintptr, region memoryRegion) bool {
 	return address >= region.start && address < region.end
 }
 
-func isReservedAddress(address uintptr) bool {
+func findMemoryRegion(address uintptr) (memoryRegion, bool) {
 	for i := uint8(0); i < regionTableCount; i++ {
 		region := regionTable[i]
-		if addressInRegion(address, region) && region.reserved {
-			return true
+		if addressInRegion(address, region) {
+			return region, true
 		}
 	}
-	return false
+	return memoryRegion{}, false
+}
+
+func isReservedAddress(address uintptr) bool {
+	region, ok := findMemoryRegion(address)
+	return ok && region.reserved
 }
 
 func isUsableDRAMAddress(address uintptr) bool {
-	for i := uint8(0); i < regionTableCount; i++ {
-		region := regionTable[i]
-		if !addressInRegion(address, region) {
-			continue
-		}
-		return region.kind == regionDRAM && !region.reserved
-	}
-	return false
+	region, ok := findMemoryRegion(address)
+	return ok && region.kind == regionDRAM && !region.reserved
 }
 
 func bootAllocatorInit(base uintptr) {
@@ -150,7 +160,7 @@ func pageAllocatorInit(base uintptr) {
 
 	for frame := uint32(0); frame < uint32(pageFrameCount); frame++ {
 		address := base + uintptr(frame)*pageSizeBytes
-		if isUsableDRAMAddress(address) && !isReservedAddress(address) {
+		if isUsableDRAMAddress(address) {
 			bitmapSetFree(frame)
 		}
 	}
@@ -162,7 +172,7 @@ func allocPage() (uintptr, bool) {
 			continue
 		}
 		address := physicalMemoryBase + uintptr(frame)*pageSizeBytes
-		if !isUsableDRAMAddress(address) || isReservedAddress(address) {
+		if !isUsableDRAMAddress(address) {
 			bitmapSetUsed(frame)
 			continue
 		}
