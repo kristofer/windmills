@@ -4,8 +4,8 @@ const (
 	pageSizeBytes                   = uintptr(4 * 1024)
 	physicalMemorySizeBytes         = uintptr(8 * 1024 * 1024)
 	bootAllocatorReserveSize        = uintptr(64 * 1024)
-	pageFrameCount           uint32 = (8 * 1024 * 1024) / (4 * 1024)
-	pageFrameBitmapBytes            = ((8 * 1024 * 1024) / (4 * 1024)) / 8
+	pageFrameCount           uint32 = uint32(physicalMemorySizeBytes / pageSizeBytes)
+	pageFrameBitmapBytes            = pageFrameCount / 8
 
 	// ESP32-S3 fixed memory-mapped hardware regions.
 	romStart        = uintptr(0x40000000)
