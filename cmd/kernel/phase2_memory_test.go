@@ -16,6 +16,9 @@ func resetPhase2ForTest() {
 	kernelPoolEndFrame = 0
 	userPoolStartFrame = 0
 	userPoolEndFrame = 0
+	for i := range runtimeHeapAllocs {
+		runtimeHeapAllocs[i] = runtimeHeapAllocation{}
+	}
 	for i := range pageFrameBitmap {
 		pageFrameBitmap[i] = 0
 	}
@@ -152,4 +155,33 @@ func TestRuntimeHeapAllocationGuardedByMemInitComplete(t *testing.T) {
 	if !runtimeHeapFree(address) {
 		t.Fatalf("runtimeHeapFree should free allocated runtime page")
 	}
+}
+
+func TestRuntimeHeapFreeReleasesContiguousAllocation(t *testing.T) {
+	resetPhase2ForTest()
+	phase2Init()
+
+	size := uintptr(3) * pageSizeBytes
+	address, ok := runtimeHeapAlloc(size)
+	if !ok {
+		t.Fatalf("runtimeHeapAlloc should allocate contiguous pages")
+	}
+	if !runtimeHeapFree(address) {
+		t.Fatalf("runtimeHeapFree should release contiguous allocation")
+	}
+
+	address2, ok := runtimeHeapAlloc(size)
+	if !ok {
+		t.Fatalf("runtimeHeapAlloc should allocate again after free")
+	}
+	if address2 != address {
+		t.Fatalf("reallocated base = 0x%x, want 0x%x", address2, address)
+	}
+}
+
+func TestTinygoRuntimeAllocPanicsOnFailure(t *testing.T) {
+	resetPhase2ForTest()
+	assertPanics(t, func() {
+		_ = tinygoRuntimeAlloc(pageSizeBytes)
+	})
 }

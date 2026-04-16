@@ -36,6 +36,7 @@ type memoryRegion struct {
 }
 
 const maxMemoryRegions = 8
+const maxRuntimeHeapAllocs = 128
 
 var (
 	physicalMemoryBase uintptr = defaultPhysicalMemoryBase
@@ -66,6 +67,14 @@ const (
 	kernelMemoryPool allocatorPool = iota
 	userMemoryPool
 )
+
+type runtimeHeapAllocation struct {
+	base  uintptr
+	pages uintptr
+	inUse bool
+}
+
+var runtimeHeapAllocs [maxRuntimeHeapAllocs]runtimeHeapAllocation
 
 func addMemoryRegion(start, end uintptr, kind memoryRegionKind, reserved bool) {
 	if start >= end {
@@ -291,8 +300,8 @@ func freePageInPool(address uintptr, pool allocatorPool) bool {
 	return true
 }
 
-func allocContigFromPool(pool allocatorPool, pages uintptr) (uintptr, bool) {
-	if pages == 0 {
+func allocContigFromPool(pool allocatorPool, pageCount uintptr) (uintptr, bool) {
+	if pageCount == 0 {
 		return 0, false
 	}
 
@@ -301,8 +310,8 @@ func allocContigFromPool(pool allocatorPool, pages uintptr) (uintptr, bool) {
 		return 0, false
 	}
 	span := end - start
-	pagesFrames := uint32(pages)
-	if uintptr(pagesFrames) != pages || pagesFrames > span {
+	requiredFrames := uint32(pageCount)
+	if uintptr(requiredFrames) != pageCount || requiredFrames > span {
 		return 0, false
 	}
 
@@ -313,12 +322,12 @@ func allocContigFromPool(pool allocatorPool, pages uintptr) (uintptr, bool) {
 
 	for scanned := uint32(0); scanned < span; scanned++ {
 		candidate := start + ((baseFrame - start + scanned) % span)
-		if candidate+pagesFrames > end {
+		if candidate+requiredFrames > end {
 			continue
 		}
 
 		fits := true
-		for offset := uint32(0); offset < pagesFrames; offset++ {
+		for offset := uint32(0); offset < requiredFrames; offset++ {
 			frame := candidate + offset
 			address := physicalMemoryBase + uintptr(frame)*pageSizeBytes
 			if bitmapIsUsed(frame) || !isUsableDRAMAddress(address) {
@@ -330,10 +339,10 @@ func allocContigFromPool(pool allocatorPool, pages uintptr) (uintptr, bool) {
 			continue
 		}
 
-		for offset := uint32(0); offset < pagesFrames; offset++ {
+		for offset := uint32(0); offset < requiredFrames; offset++ {
 			bitmapSetUsed(candidate + offset)
 		}
-		next := candidate + pagesFrames
+		next := candidate + requiredFrames
 		if next >= end {
 			next = start
 		}
@@ -352,8 +361,8 @@ func FreePage(address uintptr) bool {
 	return freePageInPool(address, kernelMemoryPool)
 }
 
-func AllocContig(pages uintptr) (uintptr, bool) {
-	return allocContigFromPool(kernelMemoryPool, pages)
+func AllocContig(pageCount uintptr) (uintptr, bool) {
+	return allocContigFromPool(kernelMemoryPool, pageCount)
 }
 
 func allocPage() (uintptr, bool) {
@@ -368,21 +377,43 @@ func runtimeHeapAlloc(size uintptr) (uintptr, bool) {
 	if !mem_init_complete || size == 0 {
 		return 0, false
 	}
-	pages := alignUp(size, pageSizeBytes) / pageSizeBytes
-	return AllocContig(pages)
+	pageCount := alignUp(size, pageSizeBytes) / pageSizeBytes
+	address, ok := AllocContig(pageCount)
+	if !ok {
+		return 0, false
+	}
+	if !runtimeHeapTrackAlloc(address, pageCount) {
+		for i := uintptr(0); i < pageCount; i++ {
+			FreePage(address + i*pageSizeBytes)
+		}
+		return 0, false
+	}
+	return address, true
 }
 
 func runtimeHeapFree(address uintptr) bool {
 	if !mem_init_complete {
 		return false
 	}
-	return FreePage(address)
+	pageCount, ok := runtimeHeapUntrackAlloc(address)
+	if !ok {
+		return false
+	}
+	for i := uintptr(0); i < pageCount; i++ {
+		if !FreePage(address + i*pageSizeBytes) {
+			return false
+		}
+	}
+	return true
 }
 
 func tinygoRuntimeAlloc(size uintptr) uintptr {
+	if size == 0 {
+		return 0
+	}
 	address, ok := runtimeHeapAlloc(size)
 	if !ok {
-		return 0
+		panic("tinygo runtime: allocation failed")
 	}
 	return address
 }
@@ -391,8 +422,34 @@ func tinygoRuntimeFree(address uintptr) bool {
 	return runtimeHeapFree(address)
 }
 
+func runtimeHeapTrackAlloc(address uintptr, pageCount uintptr) bool {
+	for i := range runtimeHeapAllocs {
+		if runtimeHeapAllocs[i].inUse {
+			continue
+		}
+		runtimeHeapAllocs[i] = runtimeHeapAllocation{
+			base:  address,
+			pages: pageCount,
+			inUse: true,
+		}
+		return true
+	}
+	return false
+}
+
+func runtimeHeapUntrackAlloc(address uintptr) (uintptr, bool) {
+	for i := range runtimeHeapAllocs {
+		if !runtimeHeapAllocs[i].inUse || runtimeHeapAllocs[i].base != address {
+			continue
+		}
+		pageCount := runtimeHeapAllocs[i].pages
+		runtimeHeapAllocs[i] = runtimeHeapAllocation{}
+		return pageCount, true
+	}
+	return 0, false
+}
+
 func phase2Init() {
-	mem_init_complete = false
 	buildMemoryMap(physicalMemoryBase)
 	bootAllocatorInit(physicalMemoryBase)
 	pageAllocatorInit(physicalMemoryBase)
