@@ -4,13 +4,32 @@
 
 .globl _start
 _start:
-	// Stack setup is intentionally deferred to TinyGo/ROM bring-up for this
-	// minimal Phase 0 stub. This file only provides a deterministic entry symbol.
-	// Expected CPU state contract at `kmain`: primary core only, ROM-established
-	// early boot register defaults, interrupts effectively masked by boot flow,
-	// and no dependency on cache/MMU reconfiguration in this phase.
+	// Stack setup remains deferred to ROM/TinyGo boot flow in this skeleton.
 	j kmain
 
-.globl windmills_vector_stub
-windmills_vector_stub:
-j windmills_vector_stub
+.globl windmills_vector_table
+windmills_vector_table:
+	j windmills_trap_entry // reset
+	j windmills_trap_entry // level 1 interrupt
+	j windmills_trap_entry // level 2 interrupt
+	j windmills_trap_entry // level 3 interrupt
+	j windmills_trap_entry // level 4 interrupt
+	j windmills_trap_entry // level 5 interrupt
+	j windmills_trap_entry // double exception
+
+.globl windmills_trap_entry
+windmills_trap_entry:
+	j windmills_trap_return
+
+.globl windmills_trap_dispatch
+windmills_trap_dispatch:
+	j windmills_trap_return
+
+.globl windmills_trap_exit
+windmills_trap_exit:
+	j windmills_trap_return
+
+.globl windmills_trap_return
+windmills_trap_return:
+	// Phase 1 funnels vectors through one trap path; return via level-1 skeleton.
+	rfi 1

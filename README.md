@@ -15,6 +15,25 @@ until the system is functionally comparable to xv6.
 - UART MMIO constants use ESP32-S3 TRM `UART0` base mapping (`0x60000000`)
 - Deterministic build entrypoint: `make firmware` (uses `SOURCE_DATE_EPOCH`, `TZ=UTC`, `LC_ALL=C`)
 
+## Phase 1 skeleton (implemented)
+
+- Xtensa interrupt/trap skeleton symbols in `cmd/kernel/startup_xtensa.S`:
+  `windmills_vector_table`, `windmills_trap_entry`, `windmills_trap_exit`
+- Timer skeleton and monotonic tick counter: `cmd/kernel/phase1_kernel.go`
+- Interrupt disable/restore primitives and basic spinlock: `cmd/kernel/phase1_kernel.go`
+- Cooperative scheduler skeleton with one kernel thread (`kthread0`):
+  `cmd/kernel/main_tinygo.go`, `cmd/kernel/phase1_kernel.go`
+
+### Phase 1 test strategy
+
+Host tests (`go test ./...`) validate the core skeleton behavior:
+
+- spinlock lock/unlock disables/restores interrupt state
+- timer interrupt handler monotonically increments tick count
+- scheduler runs the single kernel thread once
+
+Hardware bring-up and USB flashing steps are documented in `develop.md`.
+
 ## Design constraints
 
 - Language: TinyGo + small amounts of Xtensa assembly (no C).
