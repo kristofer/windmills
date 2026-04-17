@@ -32,7 +32,8 @@ Host tests (`go test ./...`) validate the core skeleton behavior:
 - timer interrupt handler monotonically increments tick count
 - scheduler runs the single kernel thread once
 
-Hardware bring-up and USB flashing steps are documented in `develop.md`.
+Hardware bring-up and USB flashing steps are documented in `develop.md`, including
+`make flash` / `make monitor` usage and a current code-review summary.
 
 ## Phase 2 physical memory ownership (implemented)
 
