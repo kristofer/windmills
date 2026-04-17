@@ -36,6 +36,7 @@ type memoryRegion struct {
 }
 
 const maxMemoryRegions = 8
+const maxRuntimeHeapAllocs = 128
 
 var (
 	physicalMemoryBase uintptr = defaultPhysicalMemoryBase
@@ -43,14 +44,37 @@ var (
 	regionTable      [maxMemoryRegions]memoryRegion
 	regionTableCount uint8
 
+	mem_init_complete bool
+
 	bootAllocatorEnabled             bool
 	bootAllocatorPermanentlyDisabled bool
 	bootAllocatorCursor              uintptr
 	bootAllocatorEnd                 uintptr
 
-	pageFrameBitmap [pageFrameBitmapBytes]uint8
-	nextFreeFrame   uint32
+	pageFrameBitmap   [pageFrameBitmapBytes]uint8
+	nextFreeFrame     uint32
+	userNextFreeFrame uint32
+
+	kernelPoolStartFrame uint32
+	kernelPoolEndFrame   uint32
+	userPoolStartFrame   uint32
+	userPoolEndFrame     uint32
 )
+
+type allocatorPool uint8
+
+const (
+	kernelMemoryPool allocatorPool = iota
+	userMemoryPool
+)
+
+type runtimeHeapAllocation struct {
+	base  uintptr
+	pages uintptr
+	inUse bool
+}
+
+var runtimeHeapAllocs [maxRuntimeHeapAllocs]runtimeHeapAllocation
 
 func addMemoryRegion(start, end uintptr, kind memoryRegionKind, reserved bool) {
 	if start >= end {
@@ -171,9 +195,72 @@ func pageAllocatorInit(base uintptr) {
 	}
 }
 
-func allocPage() (uintptr, bool) {
-	for scanned := uint32(0); scanned < pageFrameCount; scanned++ {
-		frame := (nextFreeFrame + scanned) % pageFrameCount
+func initMemoryPools() {
+	usableStartFrame := uint32(bootAllocatorReserveSize / pageSizeBytes)
+	usableFrameCount := pageFrameCount - usableStartFrame
+	kernelFrameCount := usableFrameCount / 2
+	if kernelFrameCount == 0 && usableFrameCount > 0 {
+		kernelFrameCount = usableFrameCount
+	}
+
+	kernelPoolStartFrame = usableStartFrame
+	kernelPoolEndFrame = usableStartFrame + kernelFrameCount
+	userPoolStartFrame = kernelPoolEndFrame
+	userPoolEndFrame = pageFrameCount
+	nextFreeFrame = kernelPoolStartFrame
+	userNextFreeFrame = userPoolStartFrame
+}
+
+func poolBounds(pool allocatorPool) (start, end uint32, ok bool) {
+	switch pool {
+	case kernelMemoryPool:
+		return kernelPoolStartFrame, kernelPoolEndFrame, kernelPoolStartFrame < kernelPoolEndFrame
+	case userMemoryPool:
+		return userPoolStartFrame, userPoolEndFrame, userPoolStartFrame < userPoolEndFrame
+	default:
+		return 0, 0, false
+	}
+}
+
+func poolNextFreeFrame(pool allocatorPool) uint32 {
+	if pool == userMemoryPool {
+		return userNextFreeFrame
+	}
+	return nextFreeFrame
+}
+
+func setPoolNextFreeFrame(pool allocatorPool, frame uint32) {
+	if pool == userMemoryPool {
+		userNextFreeFrame = frame
+		return
+	}
+	nextFreeFrame = frame
+}
+
+func frameFromAddress(address uintptr) (uint32, bool) {
+	if address < physicalMemoryBase || address >= physicalMemoryBase+physicalMemorySizeBytes {
+		return 0, false
+	}
+	if address%pageSizeBytes != 0 {
+		return 0, false
+	}
+	return uint32((address - physicalMemoryBase) / pageSizeBytes), true
+}
+
+func allocPageFromPool(pool allocatorPool) (uintptr, bool) {
+	start, end, ok := poolBounds(pool)
+	if !ok {
+		return 0, false
+	}
+
+	span := end - start
+	baseFrame := poolNextFreeFrame(pool)
+	if baseFrame < start || baseFrame >= end {
+		baseFrame = start
+	}
+
+	for scanned := uint32(0); scanned < span; scanned++ {
+		frame := start + ((baseFrame - start + scanned) % span)
 		if bitmapIsUsed(frame) {
 			continue
 		}
@@ -183,36 +270,190 @@ func allocPage() (uintptr, bool) {
 			continue
 		}
 		bitmapSetUsed(frame)
-		nextFreeFrame = (frame + 1) % pageFrameCount
+		next := frame + 1
+		if next >= end {
+			next = start
+		}
+		setPoolNextFreeFrame(pool, next)
 		return address, true
 	}
 	return 0, false
 }
 
-func freePage(address uintptr) bool {
-	if address < physicalMemoryBase || address >= physicalMemoryBase+physicalMemorySizeBytes {
+func freePageInPool(address uintptr, pool allocatorPool) bool {
+	frame, ok := frameFromAddress(address)
+	if !ok || !isUsableDRAMAddress(address) {
 		return false
 	}
-	if address%pageSizeBytes != 0 {
+	start, end, poolOK := poolBounds(pool)
+	if !poolOK || frame < start || frame >= end {
 		return false
 	}
-	if !isUsableDRAMAddress(address) {
-		return false
-	}
-	frame := uint32((address - physicalMemoryBase) / pageSizeBytes)
 	if !bitmapIsUsed(frame) {
 		return false
 	}
 	bitmapSetFree(frame)
-	if frame < nextFreeFrame {
-		nextFreeFrame = frame
+	next := poolNextFreeFrame(pool)
+	if next < start || next >= end || frame < next {
+		setPoolNextFreeFrame(pool, frame)
 	}
 	return true
+}
+
+func allocContigFromPool(pool allocatorPool, pageCount uintptr) (uintptr, bool) {
+	if pageCount == 0 {
+		return 0, false
+	}
+
+	start, end, ok := poolBounds(pool)
+	if !ok {
+		return 0, false
+	}
+	span := end - start
+	requiredFrames := uint32(pageCount)
+	if uintptr(requiredFrames) != pageCount || requiredFrames > span {
+		return 0, false
+	}
+
+	baseFrame := poolNextFreeFrame(pool)
+	if baseFrame < start || baseFrame >= end {
+		baseFrame = start
+	}
+
+	for scanned := uint32(0); scanned < span; scanned++ {
+		candidate := start + ((baseFrame - start + scanned) % span)
+		if candidate+requiredFrames > end {
+			continue
+		}
+
+		fits := true
+		for offset := uint32(0); offset < requiredFrames; offset++ {
+			frame := candidate + offset
+			address := physicalMemoryBase + uintptr(frame)*pageSizeBytes
+			if bitmapIsUsed(frame) || !isUsableDRAMAddress(address) {
+				fits = false
+				break
+			}
+		}
+		if !fits {
+			continue
+		}
+
+		for offset := uint32(0); offset < requiredFrames; offset++ {
+			bitmapSetUsed(candidate + offset)
+		}
+		next := candidate + requiredFrames
+		if next >= end {
+			next = start
+		}
+		setPoolNextFreeFrame(pool, next)
+		return physicalMemoryBase + uintptr(candidate)*pageSizeBytes, true
+	}
+
+	return 0, false
+}
+
+func AllocPage() (uintptr, bool) {
+	return allocPageFromPool(kernelMemoryPool)
+}
+
+func FreePage(address uintptr) bool {
+	return freePageInPool(address, kernelMemoryPool)
+}
+
+func AllocContig(pageCount uintptr) (uintptr, bool) {
+	return allocContigFromPool(kernelMemoryPool, pageCount)
+}
+
+func allocPage() (uintptr, bool) {
+	return AllocPage()
+}
+
+func freePage(address uintptr) bool {
+	return FreePage(address)
+}
+
+func runtimeHeapAlloc(size uintptr) (uintptr, bool) {
+	if !mem_init_complete || size == 0 {
+		return 0, false
+	}
+	pageCount := alignUp(size, pageSizeBytes) / pageSizeBytes
+	address, ok := AllocContig(pageCount)
+	if !ok {
+		return 0, false
+	}
+	if !runtimeHeapTrackAlloc(address, pageCount) {
+		for i := uintptr(0); i < pageCount; i++ {
+			FreePage(address + i*pageSizeBytes)
+		}
+		return 0, false
+	}
+	return address, true
+}
+
+func runtimeHeapFree(address uintptr) bool {
+	if !mem_init_complete {
+		return false
+	}
+	pageCount, ok := runtimeHeapUntrackAlloc(address)
+	if !ok {
+		return false
+	}
+	for i := uintptr(0); i < pageCount; i++ {
+		if !FreePage(address + i*pageSizeBytes) {
+			return false
+		}
+	}
+	return true
+}
+
+func tinygoRuntimeAlloc(size uintptr) uintptr {
+	if size == 0 {
+		return 0
+	}
+	address, ok := runtimeHeapAlloc(size)
+	if !ok {
+		panic("tinygo runtime: allocation failed")
+	}
+	return address
+}
+
+func tinygoRuntimeFree(address uintptr) bool {
+	return runtimeHeapFree(address)
+}
+
+func runtimeHeapTrackAlloc(address uintptr, pageCount uintptr) bool {
+	for i := range runtimeHeapAllocs {
+		if runtimeHeapAllocs[i].inUse {
+			continue
+		}
+		runtimeHeapAllocs[i] = runtimeHeapAllocation{
+			base:  address,
+			pages: pageCount,
+			inUse: true,
+		}
+		return true
+	}
+	return false
+}
+
+func runtimeHeapUntrackAlloc(address uintptr) (uintptr, bool) {
+	for i := range runtimeHeapAllocs {
+		if !runtimeHeapAllocs[i].inUse || runtimeHeapAllocs[i].base != address {
+			continue
+		}
+		pageCount := runtimeHeapAllocs[i].pages
+		runtimeHeapAllocs[i] = runtimeHeapAllocation{}
+		return pageCount, true
+	}
+	return 0, false
 }
 
 func phase2Init() {
 	buildMemoryMap(physicalMemoryBase)
 	bootAllocatorInit(physicalMemoryBase)
 	pageAllocatorInit(physicalMemoryBase)
+	initMemoryPools()
 	bootAllocatorDisable()
+	mem_init_complete = true
 }
