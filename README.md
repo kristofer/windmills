@@ -4,7 +4,7 @@
 
 This repository currently defines the high-level implementation plan and system
 specification that starts from a minimal bootable kernel and grows in phases
-until the system is functionally comparable to xv6.
+until the system is functionally comparable to xv6. [Code for xv6](https://github.com/mit-pdos/xv6-riscv)
 
 ## Phase 0 baseline (implemented)
 
