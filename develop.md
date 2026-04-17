@@ -5,8 +5,16 @@ This project targets an ESP32-S3 board connected over USB.
 ## Prerequisites
 
 - TinyGo installed and on `PATH`
+- Python 3 installed and on `PATH`
 - ESP flashing tooling (`esptool.py`)
+- Python serial monitor module (`pyserial`, for `python3 -m serial.tools.miniterm`)
 - A USB data cable and an ESP32-S3 development board
+
+Install Python tools if needed:
+
+```bash
+python3 -m pip install --user esptool pyserial
+```
 
 ## Build firmware
 
@@ -22,17 +30,22 @@ This produces `build/windmills.elf`.
 Use your board's serial device (example: `/dev/ttyACM0`):
 
 ```bash
-esptool.py --chip esp32s3 --port /dev/ttyACM0 --baud 921600 --before default_reset --after hard_reset write_flash 0x0 build/windmills.elf
+make flash PORT=/dev/ttyACM0
 ```
 
 ## Observe serial output
 
 Open a serial monitor at `115200` baud and reset the board.
 
+```bash
+make monitor PORT=/dev/ttyACM0
+```
+
 Expected Phase 1 boot messages:
 
 - `windmills: phase0 boot`
 - `windmills: phase1 init`
+- `windmills: phase2 init`
 - `windmills: kthread0 ran`
 - `windmills: entering halt loop`
 
@@ -54,3 +67,25 @@ Expected Phase 1 boot messages:
 - After printing the above, the kernel intentionally stays in the halt loop.
 - Current limitation: timer/trap plumbing is still skeleton-level; this phase does
   not yet provide full preemptive ISR-driven scheduling behavior.
+
+## Code review summary
+
+### What looks solid
+
+- The repository has focused host tests (`go test ./...`) for scheduler/interrupt
+  skeleton behavior and Phase 2 memory ownership invariants.
+- `Makefile` firmware builds are deterministic (`SOURCE_DATE_EPOCH`, `TZ`, `LC_ALL`).
+- Memory allocation paths guard against reserved-region allocation by design and test.
+
+### Gaps and risks to track
+
+- Hardware-in-the-loop tests are still manual; no automated board test harness exists yet.
+- Trap/vector and timer code is explicitly skeleton-level, so ISR-driven preemption is
+  not implemented yet.
+- On this environment, host tests pass but firmware build requires installing TinyGo
+  first (`tinygo: not found` if missing).
+
+### Can this be tested on an ESP32-S3 dev board now?
+
+Yes. The current codebase is testable on an ESP32-S3 dev board for bring-up validation:
+build firmware, flash it, and confirm the expected UART boot messages shown above.
