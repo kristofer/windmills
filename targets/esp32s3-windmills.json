@@ -1,8 +1,10 @@
 {
   "inherits": ["esp32s3"],
-  "ldflags": ["-T", "targets/esp32s3-windmills.ld"],
+
   "scheduler": "none",
   "gc": "none",
   "panic-strategy": "trap",
-  "serial": "uart"
+  "serial": "uart",
+  "binary-format": "esp32s3",
+  "flash-command": "esptool --chip=esp32s3 --port {port} write-flash 0x0000 {bin} -ff 80m -fm dout"
 }
