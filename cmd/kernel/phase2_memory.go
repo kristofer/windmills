@@ -1,5 +1,7 @@
 package main
 
+import "unsafe"
+
 const (
 	pageSizeBytes                   = uintptr(4 * 1024)
 	physicalMemorySizeBytes         = uintptr(8 * 1024 * 1024)
@@ -391,6 +393,16 @@ func runtimeHeapAlloc(size uintptr) (uintptr, bool) {
 	return address, true
 }
 
+func runtimeHeapAllocBytes(address uintptr) (uintptr, bool) {
+	for i := range runtimeHeapAllocs {
+		if !runtimeHeapAllocs[i].inUse || runtimeHeapAllocs[i].base != address {
+			continue
+		}
+		return runtimeHeapAllocs[i].pages * pageSizeBytes, true
+	}
+	return 0, false
+}
+
 func runtimeHeapFree(address uintptr) bool {
 	if !mem_init_complete {
 		return false
@@ -415,11 +427,64 @@ func tinygoRuntimeAlloc(size uintptr) uintptr {
 	if !ok {
 		panic("tinygo runtime: allocation failed")
 	}
+	clearMemory(address, alignUp(size, pageSizeBytes))
 	return address
 }
 
 func tinygoRuntimeFree(address uintptr) bool {
 	return runtimeHeapFree(address)
+}
+
+func tinygoRuntimeRealloc(address uintptr, size uintptr) uintptr {
+	if size == 0 {
+		if address != 0 {
+			_ = runtimeHeapFree(address)
+		}
+		return 0
+	}
+	if address == 0 {
+		return tinygoRuntimeAlloc(size)
+	}
+
+	oldBytes, ok := runtimeHeapAllocBytes(address)
+	if !ok {
+		panic("tinygo runtime: realloc invalid address")
+	}
+
+	newAddress := tinygoRuntimeAlloc(size)
+	copyBytes := oldBytes
+	if size < copyBytes {
+		copyBytes = size
+	}
+	copyMemory(newAddress, address, copyBytes)
+
+	if !runtimeHeapFree(address) {
+		panic("tinygo runtime: realloc free failed")
+	}
+
+	return newAddress
+}
+
+func clearMemory(address uintptr, size uintptr) {
+	for i := uintptr(0); i < size; i++ {
+		*(*byte)(unsafe.Pointer(address + i)) = 0
+	}
+}
+
+func copyMemory(dst uintptr, src uintptr, size uintptr) {
+	if dst == src || size == 0 {
+		return
+	}
+	if dst < src || dst >= src+size {
+		for i := uintptr(0); i < size; i++ {
+			*(*byte)(unsafe.Pointer(dst + i)) = *(*byte)(unsafe.Pointer(src + i))
+		}
+		return
+	}
+	for i := size; i > 0; i-- {
+		off := i - 1
+		*(*byte)(unsafe.Pointer(dst + off)) = *(*byte)(unsafe.Pointer(src + off))
+	}
 }
 
 func runtimeHeapTrackAlloc(address uintptr, pageCount uintptr) bool {
@@ -456,5 +521,5 @@ func phase2Init() {
 	initMemoryPools()
 	bootAllocatorDisable()
 	mem_init_complete = true
-	consoleWriteString("phase2init done\r\n")
+	consoleLogln("phase2init done")
 }

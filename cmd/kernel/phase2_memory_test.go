@@ -1,6 +1,17 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"unsafe"
+)
+
+func configureHostBackedPhysicalMemory(t *testing.T) []byte {
+	t.Helper()
+	ram := make([]byte, int(physicalMemorySizeBytes)+int(pageSizeBytes))
+	base := uintptr(unsafe.Pointer(&ram[0]))
+	physicalMemoryBase = alignUp(base, pageSizeBytes)
+	return ram
+}
 
 func resetPhase2ForTest() {
 	physicalMemoryBase = 0x20000000
@@ -184,4 +195,70 @@ func TestTinygoRuntimeAllocPanicsOnFailure(t *testing.T) {
 	assertPanics(t, func() {
 		_ = tinygoRuntimeAlloc(pageSizeBytes)
 	})
+}
+
+func TestTinygoRuntimeAllocZeroesReturnedMemory(t *testing.T) {
+	resetPhase2ForTest()
+	ram := configureHostBackedPhysicalMemory(t)
+	phase2Init()
+
+	address := tinygoRuntimeAlloc(32)
+	for i := uintptr(0); i < 32; i++ {
+		*(*byte)(unsafe.Pointer(address + i)) = 0xA5
+	}
+	if !tinygoRuntimeFree(address) {
+		t.Fatalf("tinygoRuntimeFree should release allocation")
+	}
+
+	address2 := tinygoRuntimeAlloc(32)
+	if address2 != address {
+		t.Fatalf("expected allocator reuse for this test: got 0x%x want 0x%x", address2, address)
+	}
+	for i := uintptr(0); i < 32; i++ {
+		if *(*byte)(unsafe.Pointer(address2+i)) != 0 {
+			t.Fatalf("expected zeroed byte at offset %d", i)
+		}
+	}
+	_ = ram
+}
+
+func TestRuntimeHeapAllocBytesTracksPageSpan(t *testing.T) {
+	resetPhase2ForTest()
+	ram := configureHostBackedPhysicalMemory(t)
+	phase2Init()
+
+	address, ok := runtimeHeapAlloc(pageSizeBytes + 1)
+	if !ok {
+		t.Fatalf("runtimeHeapAlloc should succeed")
+	}
+	bytes, tracked := runtimeHeapAllocBytes(address)
+	if !tracked {
+		t.Fatalf("runtimeHeapAllocBytes should track active allocation")
+	}
+	if bytes != 2*pageSizeBytes {
+		t.Fatalf("tracked bytes = %d, want %d", bytes, 2*pageSizeBytes)
+	}
+	_ = ram
+}
+
+func TestTinygoRuntimeReallocPreservesPrefix(t *testing.T) {
+	resetPhase2ForTest()
+	ram := configureHostBackedPhysicalMemory(t)
+	phase2Init()
+
+	address := tinygoRuntimeAlloc(16)
+	for i := uintptr(0); i < 16; i++ {
+		*(*byte)(unsafe.Pointer(address + i)) = byte(i + 1)
+	}
+
+	resized := tinygoRuntimeRealloc(address, 48)
+	if resized == 0 {
+		t.Fatalf("tinygoRuntimeRealloc should return a new allocation")
+	}
+	for i := uintptr(0); i < 16; i++ {
+		if *(*byte)(unsafe.Pointer(resized+i)) != byte(i+1) {
+			t.Fatalf("byte %d was not preserved", i)
+		}
+	}
+	_ = ram
 }

@@ -2,8 +2,10 @@
 
 package main
 
-import "unsafe"
-import "time"
+import (
+	"unsafe"
+	"time"
+)
 
 // USB-Serial/JTAG controller registers (base 0x6003_8000)
 const (
@@ -20,8 +22,12 @@ const (
 	uartFifoOffset = uintptr(0x00)
 	uartStatusReg  = uintptr(0x1C)
 	uartTxFifoMask = uint32(0xFF0000)
-	uarts = "uart"
-	usbs = "usb"
+
+	consoleLogBufferSize = 8 * 1024
+
+	usbWriteRetryLimit = 16
+	usbByteRetryLimit  = 512
+	usbRetryBackoff    = uint32(200_000)
 )
 
 type volatile32 struct{ v uint32 }
@@ -39,27 +45,33 @@ var usbEP1Conf = (*volatile32)(unsafe.Pointer(usbSerialJTAGBase + usbEPConfOffse
 var uart0FIFO = (*volatile32)(unsafe.Pointer(uart0Base + uartFifoOffset))
 var uart0Status = (*volatile32)(unsafe.Pointer(uart0Base + uartStatusReg))
 
+var consoleLogBuffer [consoleLogBufferSize]byte
+var consoleLogWrite int
+var consoleLogFull bool
+
 func main() {
 	// Give the USB CDC host time to re-enumerate after the hard reset
 	// performed by esptool.
-    time.Sleep(time.Millisecond * 4000)
+	time.Sleep(time.Millisecond * 4000)
 
-	consoleWriteString("windmills: phase0 boot\r\n")
+	consoleLogln("windmills: 101 phase0 boot")
 
 	phase1Init(kernelThread0)
-	consoleWriteString("windmills: phase1 init\r\n")
+	consoleLogln("windmills: phase1 init")
 
 	phase2Init()
-	consoleWriteString("windmills: phase2 init\r\n")
+	consoleLogln("windmills: phase2 init")
+	consoleLogln("windmills: phase2 heap ready - fmt")
 
 	schedulerRun()
 
-	consoleWriteString("windmills: entering halt loop\r\n")
+	consoleLogln("windmills: entering halt loop")
+	dumpConsoleLog()
 
 	// Write periodically so the monitor can be connected at any time
 	// and still receive confirmation that the kernel reached halt.
 	for {
-		consoleWriteString("windmills: alive\r\n")
+		consoleWriteString("windmills: alive\n")
 		time.Sleep(time.Millisecond * 1000)
 		// busyDelay(2_000_000_000)
 		// busyDelay(2_000_000_000)
@@ -67,7 +79,7 @@ func main() {
 }
 
 func kernelThread0() {
-	consoleWriteString("windmills: kthread0 ran\r\n")
+	consoleLogln("windmills: kthread0 ran")
 }
 
 func halt() {
@@ -81,12 +93,32 @@ func halt() {
 
 func usbWriteString(s string) bool {
 	for i := 0; i < len(s); i++ {
-		if !usbWriteByte(s[i]) {
+		if !usbWriteByteWithRetry(s[i]) {
 			return false
 		}
 	}
 	usbFlush()
 	return true
+}
+
+func usbWriteBytes(p []byte) bool {
+	for i := 0; i < len(p); i++ {
+		if !usbWriteByteWithRetry(p[i]) {
+			return false
+		}
+	}
+	usbFlush()
+	return true
+}
+
+func usbWriteByteWithRetry(b byte) bool {
+	for attempt := 0; attempt < usbByteRetryLimit; attempt++ {
+		if usbWriteByte(b) {
+			return true
+		}
+		busyDelay(usbRetryBackoff)
+	}
+	return false
 }
 
 func usbWriteByte(b byte) bool {
@@ -115,12 +147,58 @@ func uartWriteString(s string) {
 	}
 }
 
+func consoleLogln(message string) {
+	consoleLogAppend(message)
+	consoleLogAppend("\n")
+}
+
+func consoleLogAppend(s string) {
+	for i := 0; i < len(s); i++ {
+		consoleLogBuffer[consoleLogWrite] = s[i]
+		consoleLogWrite++
+		if consoleLogWrite >= len(consoleLogBuffer) {
+			consoleLogWrite = 0
+			consoleLogFull = true
+		}
+	}
+}
+
+func dumpConsoleLog() {
+	if !consoleLogFull {
+		if consoleLogWrite == 0 {
+			return
+		}
+		if usbWriteBytes(consoleLogBuffer[:consoleLogWrite]) {
+			return
+		}
+		uartWriteBuffer(consoleLogBuffer[:consoleLogWrite])
+		return
+	}
+
+	if !usbWriteBytes(consoleLogBuffer[consoleLogWrite:]) || !usbWriteBytes(consoleLogBuffer[:consoleLogWrite]) {
+		uartWriteBuffer(consoleLogBuffer[consoleLogWrite:])
+		uartWriteBuffer(consoleLogBuffer[:consoleLogWrite])
+	}
+}
+
+func uartWriteBuffer(p []byte) {
+	for i := 0; i < len(p); i++ {
+		uartWriteByte(p[i])
+	}
+}
+
 // consoleWriteString routes kernel logs through USB-Serial/JTAG.
 func consoleWriteString(s string) {
-	//_ = usbWriteString(usbs)
-	_ = usbWriteString(s)
-	//uartWriteString(uarts)
-	//uartWriteString(s)
+	for attempt := 0; attempt < usbWriteRetryLimit; attempt++ {
+		if usbWriteString(s) {
+			return
+		}
+		// Back off so the USB TX FIFO can drain before retrying the full line.
+		busyDelay(usbRetryBackoff)
+	}
+
+	// Keep a hardware fallback path for bring-up over UART pins.
+	uartWriteString(s)
 }
 
 func uartWriteByte(b byte) {
