@@ -21,33 +21,48 @@ const (
 	uartTxFifoMask = uint32(0xFF0000)
 )
 
+type volatile32 struct{ v uint32 }
+
+func (r *volatile32) get() uint32 {
+	return *(*uint32)(unsafe.Pointer(&r.v))
+}
+
+func (r *volatile32) set(val uint32) {
+	*(*uint32)(unsafe.Pointer(&r.v)) = val
+}
+
+var usbEP1 = (*volatile32)(unsafe.Pointer(usbSerialJTAGBase + usbEPDataOffset))
+var usbEP1Conf = (*volatile32)(unsafe.Pointer(usbSerialJTAGBase + usbEPConfOffset))
+var uart0FIFO = (*volatile32)(unsafe.Pointer(uart0Base + uartFifoOffset))
+var uart0Status = (*volatile32)(unsafe.Pointer(uart0Base + uartStatusReg))
+
 func main() {
 	// Give the USB CDC host time to re-enumerate after the hard reset
-	// performed by esptool.  ~500 ms at 240 MHz.
-	spin(120_000_000)
+	// performed by esptool.
+	busyDelay(5_000_000)
 
-	msg := "windmills: alive\r\n"
+	consoleWriteString("windmills: phase0 boot\r\n")
 
-	// Write forever so the user can open the monitor at any time and
-	// still see output.
+	phase1Init(kernelThread0)
+	consoleWriteString("windmills: phase1 init\r\n")
+
+	phase2Init()
+	consoleWriteString("windmills: phase2 init\r\n")
+
+	schedulerRun()
+
+	consoleWriteString("windmills: entering halt loop\r\n")
+
+	// Write periodically so the monitor can be connected at any time
+	// and still receive confirmation that the kernel reached halt.
 	for {
-		// Try both USB-Serial/JTAG and UART0 so output appears
-		// regardless of which port the user monitors.
-		usbWriteString(msg)
-		uartWriteString(msg)
-
-		phase1Init(kernelThread0)
-		phase2Init()
-		schedulerRun()
-
-		msg = "windmills: loop\r\n"
-		spin(120_000_000) // ~500 ms between iterations
+		consoleWriteString("windmills: alive\r\n")
+		busyDelay(10_000_000)
 	}
 }
 
 func kernelThread0() {
-	usbWriteString("windmills: kthread0 ran\r\n")
-	uartWriteString("windmills: kthread0 ran\r\n")
+	consoleWriteString("windmills: kthread0 ran\r\n")
 }
 
 func halt() {
@@ -59,30 +74,30 @@ func halt() {
 // USB-Serial/JTAG output
 // ---------------------------------------------------------------------------
 
-func usbWriteString(s string) {
+func usbWriteString(s string) bool {
 	for i := 0; i < len(s); i++ {
-		usbWriteByte(s[i])
-	}
-	usbFlush()
-}
-
-func usbWriteByte(b byte) {
-	conf := usbSerialJTAGBase + usbEPConfOffset
-	// Spin until FIFO has space (with a generous timeout so we never hang
-	// forever if the host side is not listening).
-	for i := 0; i < 1_000_000; i++ {
-		if *(*uint32)(unsafe.Pointer(conf))&usbSerialInEPDataFree != 0 {
-			*(*uint32)(unsafe.Pointer(usbSerialJTAGBase + usbEPDataOffset)) = uint32(b)
-			return
+		if !usbWriteByte(s[i]) {
+			return false
 		}
 	}
-	// Timeout — just drop the byte.
+	usbFlush()
+	return true
+}
+
+func usbWriteByte(b byte) bool {
+	timeout := uint32(5_000_000)
+	for usbEP1Conf.get()&usbSerialInEPDataFree == 0 {
+		timeout--
+		if timeout == 0 {
+			return false
+		}
+	}
+	usbEP1.set(uint32(b))
+	return true
 }
 
 func usbFlush() {
-	conf := usbSerialJTAGBase + usbEPConfOffset
-	v := *(*uint32)(unsafe.Pointer(conf))
-	*(*uint32)(unsafe.Pointer(conf)) = v | usbWRDone
+	usbEP1Conf.set(usbEP1Conf.get() | usbWRDone)
 }
 
 // ---------------------------------------------------------------------------
@@ -95,28 +110,30 @@ func uartWriteString(s string) {
 	}
 }
 
+// consoleWriteString routes kernel logs through USB-Serial/JTAG.
+func consoleWriteString(s string) {
+	_ = usbWriteString(s)
+	uartWriteString(s)
+}
+
 func uartWriteByte(b byte) {
-	for {
-		status := *(*uint32)(unsafe.Pointer(uart0Base + uartStatusReg))
-		if ((status & uartTxFifoMask) >> 16) < 127 {
-			break
+	timeout := uint32(100000)
+	for ((uart0Status.get() & uartTxFifoMask) >> 16) >= 126 {
+		timeout--
+		if timeout == 0 {
+			return
 		}
 	}
-	*(*uint32)(unsafe.Pointer(uart0Base + uartFifoOffset)) = uint32(b)
+	uart0FIFO.set(uint32(b))
 }
 
 // ---------------------------------------------------------------------------
 // Utility
 // ---------------------------------------------------------------------------
 
-// spin performs a busy-wait loop for roughly n iterations.
-//
-//go:noinline
-func spin(n int) {
-	for i := 0; i < n; i++ {
-		nop()
+func busyDelay(cycles uint32) {
+	for i := uint32(0); i < cycles; i++ {
+		// Prevent aggressive loop elimination.
+		_ = uart0Status.get()
 	}
 }
-
-//go:noinline
-func nop() {}

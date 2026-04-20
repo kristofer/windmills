@@ -1,9 +1,9 @@
 TINYGO ?= tinygo
 TARGET ?= ./targets/esp32s3-windmills.json
 OUT ?= build/windmills.bin
-ESPTOOL ?= esptool
 PORT ?= /dev/ttyACM0
-PYTHON ?= python3
+VENV_PYTHON := $(CURDIR)/venv/bin/python
+PYTHON ?= $(if $(wildcard $(VENV_PYTHON)),$(VENV_PYTHON),python3)
 FLASH_BAUD ?= 921600
 MONITOR_BAUD ?= 115200
 # Fixed at 2024-01-01T00:00:00Z for reproducible image metadata.
@@ -17,7 +17,7 @@ firmware:
 		$(TINYGO) build -target $(TARGET) -scheduler=none -gc=none -panic=trap -opt=2 -o $(OUT) ./cmd/kernel
 
 flash: firmware
-	$(ESPTOOL) --chip esp32s3 --port $(PORT) --baud $(FLASH_BAUD) --before default-reset --after hard-reset write-flash 0x0 $(OUT)
+	$(TINYGO) flash -target $(TARGET) -scheduler=none -gc=none -panic=trap -opt=2 -port $(PORT) ./cmd/kernel
 
 monitor:
 	$(PYTHON) -m serial.tools.miniterm $(PORT) $(MONITOR_BAUD)

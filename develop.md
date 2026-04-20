@@ -36,13 +36,19 @@ make flash
 make flash PORT=/dev/ttyUSB0
 ```
 
+`make flash` uses `tinygo flash` (not a raw `esptool write-flash` at `0x0`), so TinyGo handles the proper ESP32-S3 image layout and offsets.
+
 ## Observe serial output
 
 Open a serial monitor at `115200` baud and reset the board.
 
 ```bash
-make monitor PORT=/dev/ttyACM0
+make monitor
+# or, for a different port:
+make monitor PORT=/dev/ttyUSB0
 ```
+
+The monitor command prefers `./venv/bin/python` when present, so it will use your venv-installed `pyserial` automatically.
 
 Expected Phase 1 boot messages:
 
