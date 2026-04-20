@@ -20,7 +20,8 @@ flash: firmware
 	$(TINYGO) flash -target $(TARGET) -scheduler=none -gc=none -panic=trap -opt=2 -port $(PORT) ./cmd/kernel
 
 monitor:
-	$(PYTHON) -m serial.tools.miniterm $(PORT) $(MONITOR_BAUD)
+# $(PYTHON) -m serial.tools.miniterm $(PORT) $(MONITOR_BAUD)
+	$(TINYGO) monitor
 
 clean:
 	rm -rf build

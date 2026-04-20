@@ -3,6 +3,7 @@
 package main
 
 import "unsafe"
+import "time"
 
 // USB-Serial/JTAG controller registers (base 0x6003_8000)
 const (
@@ -19,6 +20,8 @@ const (
 	uartFifoOffset = uintptr(0x00)
 	uartStatusReg  = uintptr(0x1C)
 	uartTxFifoMask = uint32(0xFF0000)
+	uarts = "uart"
+	usbs = "usb"
 )
 
 type volatile32 struct{ v uint32 }
@@ -39,7 +42,7 @@ var uart0Status = (*volatile32)(unsafe.Pointer(uart0Base + uartStatusReg))
 func main() {
 	// Give the USB CDC host time to re-enumerate after the hard reset
 	// performed by esptool.
-	busyDelay(5_000_000)
+    time.Sleep(time.Millisecond * 4000)
 
 	consoleWriteString("windmills: phase0 boot\r\n")
 
@@ -57,7 +60,9 @@ func main() {
 	// and still receive confirmation that the kernel reached halt.
 	for {
 		consoleWriteString("windmills: alive\r\n")
-		busyDelay(10_000_000)
+		time.Sleep(time.Millisecond * 1000)
+		// busyDelay(2_000_000_000)
+		// busyDelay(2_000_000_000)
 	}
 }
 
@@ -112,8 +117,10 @@ func uartWriteString(s string) {
 
 // consoleWriteString routes kernel logs through USB-Serial/JTAG.
 func consoleWriteString(s string) {
+	//_ = usbWriteString(usbs)
 	_ = usbWriteString(s)
-	uartWriteString(s)
+	//uartWriteString(uarts)
+	//uartWriteString(s)
 }
 
 func uartWriteByte(b byte) {
