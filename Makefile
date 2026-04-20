@@ -2,8 +2,8 @@ TINYGO ?= tinygo
 TARGET ?= ./targets/esp32s3-windmills.json
 OUT ?= build/windmills.bin
 ESPTOOL ?= esptool
+PORT ?= /dev/ttyACM0
 PYTHON ?= python3
-PORT ?= /dev/cu.usbmodem1101
 FLASH_BAUD ?= 921600
 MONITOR_BAUD ?= 115200
 # Fixed at 2024-01-01T00:00:00Z for reproducible image metadata.

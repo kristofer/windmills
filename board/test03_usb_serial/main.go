@@ -15,8 +15,8 @@ const (
 
 // EP1_CONF bits
 const (
-	wrDone              uint32 = 1 << 0 // bit 0: flush TX FIFO
-	serialInEPDataFree  uint32 = 1 << 1 // bit 1: FIFO ready for write
+	wrDone             uint32 = 1 << 0 // bit 0: flush TX FIFO
+	serialInEPDataFree uint32 = 1 << 1 // bit 1: FIFO ready for write
 )
 
 func writeReg32(addr uintptr, val uint32) {
@@ -75,7 +75,7 @@ func main() {
 	busyDelay()
 
 	for {
-		usbWriteString("test03: hello from USB\r\n")
+		usbWriteString("test03: hello Kristofer, from USB\r\n")
 		busyDelay()
 	}
 }

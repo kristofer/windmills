@@ -23,14 +23,17 @@ cd <path-to-windmills>
 make firmware
 ```
 
-This produces `build/windmills.elf`.
+This produces `build/windmills.bin`.
 
 ## Flash to board
 
-Use your board's serial device (example: `/dev/ttyACM0`):
+The `PORT` variable defaults to `/dev/ttyACM0` (standard Linux USB-serial path for ESP32-S3).
+Override it if your board appears on a different node:
 
 ```bash
-make flash PORT=/dev/ttyACM0
+make flash
+# or, for a different port:
+make flash PORT=/dev/ttyUSB0
 ```
 
 ## Observe serial output

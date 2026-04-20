@@ -1,7 +1,7 @@
 TINYGO ?= tinygo
 TARGET ?= ../targets/esp32s3-windmills.json
 ESPTOOL ?= esptool
-PORT ?= /dev/cu.usbmodem1101
+PORT ?= /dev/ttyACM0 # /dev/ttyAMA0
 BAUD ?= 115200
 
 FLASH_FLAGS = -target $(TARGET) -scheduler=none -gc=none -panic=trap -opt=2 -port $(PORT)
