@@ -75,8 +75,6 @@ func vmMapPage(pt *vmPageTable, vaddr, paddr uintptr, perm vmPerm) bool {
 		entry.paddr = paddr
 		entry.perm = perm
 		entry.present = true
-		entry.owned = false
-		entry.pool = kernelMemoryPool
 		return true
 	}
 	for i := range pt.mappings {
