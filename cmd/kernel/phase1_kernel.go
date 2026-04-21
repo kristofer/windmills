@@ -59,6 +59,8 @@ const (
 	syscallGetpid
 )
 
+const syscallError = ^uintptr(0)
+
 var (
 	interruptsEnabled  = true
 	interruptDisableN  uint32
@@ -175,6 +177,9 @@ func allocProcess(name string, entry func(), parentPID int) (*process, bool) {
 			continue
 		}
 		p := &processTable[i]
+		if nextPID == int(^uint(0)>>1) {
+			panic("process allocator: pid space exhausted")
+		}
 		*p = process{
 			slot:             i,
 			pid:              nextPID,
@@ -190,7 +195,9 @@ func allocProcess(name string, entry func(), parentPID int) (*process, bool) {
 		p.state = procRunnable
 		return p, true
 	}
-	_ = FreePage(kstack)
+	if !FreePage(kstack) {
+		panic("process allocator: failed to release kernel stack page")
+	}
 	return nil, false
 }
 
@@ -322,7 +329,9 @@ func processExit(p *process, status int) {
 
 func releaseProcess(p *process) {
 	for page := uintptr(0); page < p.kernelStackPages; page++ {
-		_ = FreePage(p.kernelStackBase + page*pageSizeBytes)
+		if !FreePage(p.kernelStackBase + page*pageSizeBytes) {
+			panic("process release: failed to free kernel stack page")
+		}
 	}
 	slot := p.slot
 	*p = process{
@@ -336,10 +345,9 @@ func syscallDispatch(p *process, tf *trapframe) uintptr {
 	case syscallFork:
 		child, ok := allocProcess(p.name, p.entry, p.pid)
 		if !ok {
-			return ^uintptr(0)
+			return syscallError
 		}
 		child.trapframe = p.trapframe
-		child.context = p.context
 		child.trapframe.ReturnValue = 0
 		return uintptr(child.pid)
 	case syscallExit:
@@ -359,16 +367,17 @@ func syscallDispatch(p *process, tf *trapframe) uintptr {
 			}
 		}
 		if !hasChildren {
-			return ^uintptr(0)
+			return syscallError
 		}
-		return 0
+		p.state = procSleeping
+		panic(yieldSignal{})
 	case syscallYield:
 		schedulerYield()
 		return 0
 	case syscallGetpid:
 		return uintptr(p.pid)
 	default:
-		return ^uintptr(0)
+		return syscallError
 	}
 }
 
@@ -377,7 +386,7 @@ func trapDispatch(tf *trapframe) {
 		return
 	}
 	if currentProc == nil {
-		tf.ReturnValue = ^uintptr(0)
+		tf.ReturnValue = syscallError
 		return
 	}
 	currentProc.trapframe = *tf
