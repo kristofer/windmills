@@ -54,14 +54,14 @@ func main() {
 	// performed by esptool.
 	time.Sleep(time.Millisecond * 4000)
 
-	consoleLogln("windmills: 101 phase0 boot")
+	consoleLogln("windmills: phase0 boot")
 
 	phase1Init(kernelThread0)
 	consoleLogln("windmills: phase1 init")
 
 	phase2Init()
 	consoleLogln("windmills: phase2 init")
-	consoleLogln("windmills: phase2 heap ready - fmt")
+	consoleLogln("windmills: phase2 heap ready")
 
 	schedulerRun()
 
@@ -71,8 +71,8 @@ func main() {
 	// Write periodically so the monitor can be connected at any time
 	// and still receive confirmation that the kernel reached halt.
 	for {
-		consoleWriteString("windmills: alive\n")
 		time.Sleep(time.Millisecond * 1000)
+		consoleWriteString("windmills: alive\n")
 		// busyDelay(2_000_000_000)
 		// busyDelay(2_000_000_000)
 	}
@@ -148,8 +148,10 @@ func uartWriteString(s string) {
 }
 
 func consoleLogln(message string) {
+	time.Sleep(time.Millisecond * 100)
 	consoleLogAppend(message)
-	consoleLogAppend("\n")
+	consoleLogAppend("\r\n")
+	time.Sleep(time.Millisecond * 100)
 }
 
 func consoleLogAppend(s string) {

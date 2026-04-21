@@ -521,5 +521,5 @@ func phase2Init() {
 	initMemoryPools()
 	bootAllocatorDisable()
 	mem_init_complete = true
-	consoleLogln("phase2init done")
+	consoleLogln("phase2init done\r\n")
 }
