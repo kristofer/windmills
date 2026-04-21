@@ -72,6 +72,8 @@ func vmMapPage(pt *vmPageTable, vaddr, paddr uintptr, perm vmPerm) bool {
 		return false
 	}
 	if entry, ok := vmFindMapping(pt, vaddr); ok {
+		// Remapping updates physical address/permissions while preserving ownership
+		// metadata so cleanup semantics remain explicit via vmMapOwnedPage.
 		entry.paddr = paddr
 		entry.perm = perm
 		entry.present = true
