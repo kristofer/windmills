@@ -132,7 +132,7 @@ Host tests (`go test ./...`) validate:
 - timer interrupt triggers round-robin preemption across multiple processes
 - trap dispatch correctly executes `fork`, `wait`, `exit`, `yield`, and `getpid` syscall lifecycle
 
-### Phase 5 - Virtual memory and address spaces
+## Phase 5 virtual memory and address spaces (implemented)
 
 Goal: xv6-like process isolation adapted for Xtensa/ESP32 constraints.
 
@@ -140,6 +140,15 @@ Goal: xv6-like process isolation adapted for Xtensa/ESP32 constraints.
 - Implement page table abstractions and mapping APIs in TinyGo.
 - Kernel/user permission checks on copyin/copyout.
 - Lazy user stack growth and robust fault handling.
+
+### Phase 5 test strategy
+
+Host tests (`go test ./...`) validate:
+
+- per-process virtual layout initialization including stack/trap-page invariants
+- page-table mapping + translation permission checks for user/kernel visibility
+- `copyin`/`copyout` user-access checks across mapped and kernel-only pages
+- lazy stack growth on user faults and guard-page fault rejection paths
 
 ### Phase 6 - Files, devices, and namespace
 

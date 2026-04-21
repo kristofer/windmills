@@ -46,6 +46,8 @@ type process struct {
 	entry            func()
 	kernelStackBase  uintptr
 	kernelStackPages uintptr
+	vm               vmAddressSpace
+	faulted          bool
 	trapframe        trapframe
 	context          savedContext
 	exitStatus       int
@@ -190,6 +192,16 @@ func allocProcess(name string, entry func(), parentPID int) (*process, bool) {
 			kernelStackBase:  kstack,
 			kernelStackPages: 1,
 		}
+		if !vmInitProcess(p) {
+			if !FreePage(kstack) {
+				panic("process allocator: failed to release kernel stack page")
+			}
+			*p = process{
+				slot:  i,
+				state: procUnused,
+			}
+			return nil, false
+		}
 		p.context.sp = kstack + pageSizeBytes
 		nextPID++
 		p.state = procRunnable
@@ -328,6 +340,7 @@ func processExit(p *process, status int) {
 }
 
 func releaseProcess(p *process) {
+	vmReleaseProcess(p)
 	for page := uintptr(0); page < p.kernelStackPages; page++ {
 		if !FreePage(p.kernelStackBase + page*pageSizeBytes) {
 			panic("process release: failed to free kernel stack page")
