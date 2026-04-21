@@ -208,7 +208,7 @@ func vmGrowStack(p *process, faultVA uintptr) bool {
 func vmHandleFault(p *process, faultVA uintptr, write bool) bool {
 	required := vmPermRead
 	if write {
-		required = vmPermRead | vmPermWrite
+		required |= vmPermWrite
 	}
 	if _, ok := vmTranslate(&p.vm.ptable, faultVA, required, true); ok {
 		return true
