@@ -132,7 +132,7 @@ Host tests (`go test ./...`) validate:
 - timer interrupt triggers round-robin preemption across multiple processes
 - trap dispatch correctly executes `fork`, `wait`, `exit`, `yield`, and `getpid` syscall lifecycle
 
-## Phase 5 virtual memory and address spaces (implemented)
+### Phase 5 - Virtual memory and address spaces (implemented)
 
 Goal: xv6-like process isolation adapted for Xtensa/ESP32 constraints.
 

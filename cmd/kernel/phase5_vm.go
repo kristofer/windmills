@@ -19,6 +19,7 @@ const (
 	userStackTop   = uintptr(0x7FFF0000)
 	userTrapPageVA = uintptr(0x7FFFF000)
 	userStackPages = uintptr(16)
+	vmNoGuard      = uintptr(0)
 )
 
 type vmPageMapping struct {
@@ -138,14 +139,14 @@ func vmInitAddressSpace(as *vmAddressSpace) {
 		stackFloor: userStackTop - userStackPages*pageSizeBytes,
 		trapPage:   userTrapPageVA,
 	}
-	as.layout.guardStart = 0
-	as.layout.guardEnd = 0
+	as.layout.guardStart = vmNoGuard
+	as.layout.guardEnd = vmNoGuard
 }
 
 func vmRefreshGuard(as *vmAddressSpace) {
 	if as.layout.stackBase == as.layout.stackTop {
-		as.layout.guardStart = 0
-		as.layout.guardEnd = 0
+		as.layout.guardStart = vmNoGuard
+		as.layout.guardEnd = vmNoGuard
 		return
 	}
 	as.layout.guardStart = as.layout.stackBase - pageSizeBytes
@@ -207,12 +208,12 @@ func vmGrowStack(p *process, faultVA uintptr) bool {
 func vmHandleFault(p *process, faultVA uintptr, write bool) bool {
 	required := vmPermRead
 	if write {
-		required = vmPermWrite
+		required = vmPermRead | vmPermWrite
 	}
 	if _, ok := vmTranslate(&p.vm.ptable, faultVA, required, true); ok {
 		return true
 	}
-	if p.vm.layout.guardStart != 0 && faultVA >= p.vm.layout.guardStart && faultVA < p.vm.layout.guardEnd {
+	if p.vm.layout.guardStart != vmNoGuard && faultVA >= p.vm.layout.guardStart && faultVA < p.vm.layout.guardEnd {
 		p.faulted = true
 		return false
 	}
