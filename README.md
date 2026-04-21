@@ -99,7 +99,7 @@ Goal: allow Go heap use only after kernel memory control is established.
 - Keep kernel/user memory pools separate from the first runtime integration.
 - Enable guarded heap allocation only after `mem_init_complete=true`.
 
-### Phase 4 - Processes, context switching, and syscalls
+### Phase 4 - Processes, context switching, and syscalls (implemented)
 
 Goal: move from kernel-thread model to xv6-like process model.
 
@@ -107,6 +107,30 @@ Goal: move from kernel-thread model to xv6-like process model.
 - Per-process kernel stack, trapframe, and saved register context.
 - Round-robin preemptive scheduler using timer interrupts.
 - Syscall ABI + trap dispatch (`fork`, `exit`, `wait`, `yield`, `getpid` first).
+
+## Phase 4 process model (implemented)
+
+- Fixed-size process table (`NPROC = 16`) with explicit lifecycle states
+  (`UNUSED`, `EMBRYO`, `RUNNABLE`, `RUNNING`, `SLEEPING`, `ZOMBIE`):
+  `cmd/kernel/phase1_kernel.go`
+- Per-process kernel stack allocated from the page allocator,
+  `trapframe`, and `savedContext` metadata:
+  `cmd/kernel/phase1_kernel.go`
+- Round-robin preemptive scheduler: `schedulerRun`, `pickNextRunnable`,
+  `switchToProcess` driven by timer-interrupt preemption signals:
+  `cmd/kernel/phase1_kernel.go`
+- Syscall trap dispatch (`trapDispatch`) with initial syscall set:
+  `fork`, `exit`, `wait`, `yield`, `getpid`:
+  `cmd/kernel/phase1_kernel.go`
+
+### Phase 4 test strategy
+
+Host tests (`go test ./...`) validate:
+
+- bootstrap process is created and transitions to `ZOMBIE` after running
+- process table respects `NPROC` upper bound
+- timer interrupt triggers round-robin preemption across multiple processes
+- trap dispatch correctly executes `fork`, `wait`, `exit`, `yield`, and `getpid` syscall lifecycle
 
 ### Phase 5 - Virtual memory and address spaces
 
