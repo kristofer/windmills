@@ -3,8 +3,8 @@ package main
 import "testing"
 
 const (
-	testStackOffsetBytes = uintptr(8)
-	testGuardOffsetBytes = uintptr(1)
+	testStackOffsetFromTop   = uintptr(8)
+	testGuardOffsetFromStart = uintptr(1)
 )
 
 func TestPhase5ProcessLayoutIncludesStackGuardAndTrapPage(t *testing.T) {
@@ -102,7 +102,7 @@ func TestPhase5LazyStackGrowthAndFaultHandling(t *testing.T) {
 	}
 	defer releaseProcess(p)
 
-	stackAddr := p.vm.layout.stackTop - testStackOffsetBytes
+	stackAddr := p.vm.layout.stackTop - testStackOffsetFromTop
 	if !copyout(p, stackAddr, []byte{0xAB}) {
 		t.Fatalf("copyout should trigger lazy stack growth")
 	}
@@ -110,7 +110,7 @@ func TestPhase5LazyStackGrowthAndFaultHandling(t *testing.T) {
 		t.Fatalf("stackBase = 0x%x, want 0x%x", p.vm.layout.stackBase, p.vm.layout.stackTop-pageSizeBytes)
 	}
 
-	guardAddr := p.vm.layout.guardStart + testGuardOffsetBytes
+	guardAddr := p.vm.layout.guardStart + testGuardOffsetFromStart
 	if guardAddr < p.vm.layout.guardEnd && copyout(p, guardAddr, []byte{0xCD}) {
 		t.Fatalf("copyout into guard page should fail")
 	}
