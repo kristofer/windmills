@@ -154,10 +154,12 @@ func schedulerInit(entry func()) {
 	}
 	bootstrap = entry
 	for i := range processTable {
-		processTable[i] = process{
-			slot:  i,
-			state: procUnused,
-		}
+		// Set only the fields that differ from zero; the rest of the struct
+		// (including vmAddressSpace with its 128-entry page table) is already
+		// zero-initialised in BSS. Assigning a full process{} composite literal
+		// here would place a ~1.6 KB temporary on the 16 K stack each iteration.
+		processTable[i].slot = i
+		processTable[i].state = procUnused
 	}
 	nextPID = 1
 	currentProc = nil

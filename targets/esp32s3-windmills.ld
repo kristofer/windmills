@@ -139,8 +139,9 @@ _globals_end   = _ebss;
 _heap_start = _ebss;
 _heap_end   = ORIGIN(DRAM) + LENGTH(DRAM);
 
-/* Default stack size (can be overridden on the tinygo command line) */
-_stack_size = 4K;
+/* Default stack size (16 K to accommodate large kernel structs such as
+ * vmAddressSpace in the process table during schedulerInit). */
+_stack_size = 16K;
 
 /* =====================================================================
  * ROM function stubs

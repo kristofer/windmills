@@ -3,11 +3,23 @@ package main
 import "unsafe"
 
 const (
-	pageSizeBytes                   = uintptr(4 * 1024)
-	physicalMemorySizeBytes         = uintptr(8 * 1024 * 1024)
-	bootAllocatorReserveSize        = uintptr(64 * 1024)
-	pageFrameCount           uint32 = uint32(physicalMemorySizeBytes / pageSizeBytes)
-	pageFrameBitmapBytes            = pageFrameCount / 8
+	pageSizeBytes = uintptr(4 * 1024)
+
+	// ESP32-S3 internal DRAM: 416 KB mapped by the linker script
+	// (ORIGIN = 0x3FC88000, LENGTH = 416K → end = 0x3FCF0000).
+	// Using 416 K here keeps pageFrameCount aligned with the actual
+	// addressable window and prevents the page allocator from handing out
+	// phantom frames above real DRAM (which would cause hardware faults
+	// when used as process kernel stacks).
+	physicalMemorySizeBytes = uintptr(416 * 1024)
+
+	// Reserve the first 128 KB for the TinyGo runtime binary (stack, BSS,
+	// rodata in DRAM). With a 16 K stack + ~30 KB of kernel globals the
+	// actual high-water mark is ~46 KB; 128 KB gives comfortable headroom.
+	bootAllocatorReserveSize = uintptr(128 * 1024)
+
+	pageFrameCount       uint32 = uint32(physicalMemorySizeBytes / pageSizeBytes)
+	pageFrameBitmapBytes        = pageFrameCount / 8
 
 	// ESP32-S3 fixed memory-mapped hardware regions.
 	romStart        = uintptr(0x40000000)
@@ -17,8 +29,9 @@ const (
 	peripheralStart = uintptr(0x60000000)
 	peripheralEnd   = uintptr(0x61000000)
 
-	// ESP32-S3 DRAM base used for host-model defaults; this value remains configurable.
-	defaultPhysicalMemoryBase = uintptr(0x3FC80000)
+	// ESP32-S3 DRAM base: data bus window starts at 0x3FC88000.
+	// (The previous value 0x3FC80000 was 32 KB below real DRAM.)
+	defaultPhysicalMemoryBase = uintptr(0x3FC88000)
 )
 
 type memoryRegionKind uint8
@@ -521,5 +534,5 @@ func phase2Init() {
 	initMemoryPools()
 	bootAllocatorDisable()
 	mem_init_complete = true
-	consoleLogln("phase2init done\r\n")
+	consoleLogln("phase2init done")
 }
