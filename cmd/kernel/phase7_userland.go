@@ -207,11 +207,7 @@ func phase7RunCommand(p *process, cmd string, args []string, stdin []byte) ([]by
 			return nil, false
 		}
 		tf := trapframe{Syscall: syscallKill, Args: [3]uintptr{uintptr(pid), 0, 0}}
-		previous := currentProc
-		currentProc = p
-		trapDispatch(&tf)
-		currentProc = previous
-		if tf.ReturnValue == syscallError {
+		if syscallDispatch(p, &tf) == syscallError {
 			return nil, false
 		}
 		return nil, true

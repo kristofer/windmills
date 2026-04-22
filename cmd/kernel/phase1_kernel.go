@@ -358,7 +358,11 @@ func sysKill(_ *process, pid int) uintptr {
 		return syscallError
 	}
 	if target == currentProc {
-		return syscallError
+		if runDepth > 0 {
+			panic(exitSignal{status: -1})
+		}
+		processExit(target, -1)
+		return 0
 	}
 	processExit(target, -1)
 	return 0
