@@ -69,6 +69,7 @@ const (
 	syscallUnlink
 	syscallMkdir
 	syscallChdir
+	syscallKill
 )
 
 const syscallError = ^uintptr(0)
@@ -351,6 +352,18 @@ func processExit(p *process, status int) {
 	}
 }
 
+func sysKill(_ *process, pid int) uintptr {
+	target := findProcByPID(pid)
+	if target == nil {
+		return syscallError
+	}
+	if target == currentProc {
+		panic(exitSignal{status: -1})
+	}
+	processExit(target, -1)
+	return 0
+}
+
 func releaseProcess(p *process) {
 	vmReleaseProcess(p)
 	for page := uintptr(0); page < p.kernelStackPages; page++ {
@@ -441,6 +454,8 @@ func syscallDispatch(p *process, tf *trapframe) uintptr {
 			return syscallError
 		}
 		return sysChdir(p, path)
+	case syscallKill:
+		return sysKill(p, int(tf.Args[0]))
 	default:
 		return syscallError
 	}

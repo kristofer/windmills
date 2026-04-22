@@ -168,13 +168,21 @@ Host tests (`go test ./...`) validate:
 - device-file behavior for console output and timer reads
 - namespace operations `mkdir/chdir/link/unlink` including relative-path lookups
 
-### Phase 7 - Shell + userland
+### Phase 7 - Shell + userland (implemented)
 
 Goal: establish xv6-like user workflow.
 
 - Tiny userspace ABI and linker conventions.
 - Init + shell with pipelines/redirection subset.
 - Basic user utilities (`ls`, `cat`, `echo`, `sh`, `kill`, `ps`-like tool).
+
+### Phase 7 test strategy
+
+Host tests (`go test ./...`) validate:
+
+- userland bootstrap artifacts (`/init`, `/bin/{sh,ls,cat,echo,kill,ps}`)
+- shell command parsing for a pipelines + redirection subset
+- utility behavior for `ls`, `cat`, `echo`, `kill`, and `ps`
 
 ### Phase 8 - SMP support (second core)
 
