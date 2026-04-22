@@ -124,6 +124,7 @@ func phase7RunShellLine(p *process, line string, stdin []byte) (string, bool) {
 			out = nil
 		}
 		in = out
+		// Output redirection is only valid for the final stage of a pipeline.
 		if i < len(segments)-1 && outputPath != "" {
 			return "", false
 		}
