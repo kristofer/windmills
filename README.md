@@ -150,7 +150,7 @@ Host tests (`go test ./...`) validate:
 - `copyin`/`copyout` user-access checks across mapped and kernel-only pages
 - lazy stack growth on user faults and guard-page fault rejection paths
 
-### Phase 6 - Files, devices, and namespace
+### Phase 6 - Files, devices, and namespace (implemented)
 
 Goal: minimal xv6-like VFS and device access.
 
@@ -158,6 +158,15 @@ Goal: minimal xv6-like VFS and device access.
 - Console, UART, and timer device files.
 - Simple on-flash filesystem and init process startup (`/init` equivalent).
 - Core syscalls: `open/read/write/close`, `link/unlink`, `mkdir/chdir`.
+
+### Phase 6 test strategy
+
+Host tests (`go test ./...`) validate:
+
+- filesystem initialization includes `/init` and `/dev/{console,uart,timer}` nodes
+- syscall-level `open/read/write/close` behavior for regular files
+- device-file behavior for console output and timer reads
+- namespace operations `mkdir/chdir/link/unlink` including relative-path lookups
 
 ### Phase 7 - Shell + userland
 

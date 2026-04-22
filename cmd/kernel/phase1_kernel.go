@@ -47,6 +47,8 @@ type process struct {
 	kernelStackBase  uintptr
 	kernelStackPages uintptr
 	vm               vmAddressSpace
+	cwdInode         int
+	fdTable          [maxOpenFiles]fileDescriptor
 	faulted          bool
 	trapframe        trapframe
 	context          savedContext
@@ -59,6 +61,14 @@ const (
 	syscallWait
 	syscallYield
 	syscallGetpid
+	syscallOpen
+	syscallRead
+	syscallWrite
+	syscallClose
+	syscallLink
+	syscallUnlink
+	syscallMkdir
+	syscallChdir
 )
 
 const syscallError = ^uintptr(0)
@@ -391,6 +401,46 @@ func syscallDispatch(p *process, tf *trapframe) uintptr {
 		return 0
 	case syscallGetpid:
 		return uintptr(p.pid)
+	case syscallOpen:
+		path, ok := copyinstr(p, tf.Args[0], maxPathLength)
+		if !ok {
+			return syscallError
+		}
+		return sysOpen(p, path, tf.Args[1])
+	case syscallRead:
+		return sysRead(p, int(tf.Args[0]), tf.Args[1], tf.Args[2])
+	case syscallWrite:
+		return sysWrite(p, int(tf.Args[0]), tf.Args[1], tf.Args[2])
+	case syscallClose:
+		return sysClose(p, int(tf.Args[0]))
+	case syscallLink:
+		oldPath, ok := copyinstr(p, tf.Args[0], maxPathLength)
+		if !ok {
+			return syscallError
+		}
+		newPath, ok := copyinstr(p, tf.Args[1], maxPathLength)
+		if !ok {
+			return syscallError
+		}
+		return sysLink(p, oldPath, newPath)
+	case syscallUnlink:
+		path, ok := copyinstr(p, tf.Args[0], maxPathLength)
+		if !ok {
+			return syscallError
+		}
+		return sysUnlink(p, path)
+	case syscallMkdir:
+		path, ok := copyinstr(p, tf.Args[0], maxPathLength)
+		if !ok {
+			return syscallError
+		}
+		return sysMkdir(p, path)
+	case syscallChdir:
+		path, ok := copyinstr(p, tf.Args[0], maxPathLength)
+		if !ok {
+			return syscallError
+		}
+		return sysChdir(p, path)
 	default:
 		return syscallError
 	}
