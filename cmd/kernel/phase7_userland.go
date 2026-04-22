@@ -117,6 +117,7 @@ func phase7RunShellLine(p *process, line string, stdin []byte) (string, bool) {
 		if !ok {
 			return "", false
 		}
+		// Output redirection is only valid for the final stage of a pipeline.
 		if i < len(segments)-1 && outputPath != "" {
 			return "", false
 		}
@@ -203,7 +204,7 @@ func phase7RunCommand(p *process, cmd string, args []string, stdin []byte) ([]by
 			return nil, false
 		}
 		pid, err := strconv.Atoi(args[0])
-		if err != nil || pid < 0 {
+		if err != nil || pid <= 0 {
 			return nil, false
 		}
 		tf := trapframe{Syscall: syscallKill, Args: [3]uintptr{uintptr(pid), 0, 0}}
