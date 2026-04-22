@@ -117,6 +117,9 @@ func phase7RunShellLine(p *process, line string, stdin []byte) (string, bool) {
 		if !ok {
 			return "", false
 		}
+		if i < len(segments)-1 && outputPath != "" {
+			return "", false
+		}
 		if outputPath != "" {
 			if !phase7WriteFile(p, outputPath, out) {
 				return "", false
@@ -124,10 +127,6 @@ func phase7RunShellLine(p *process, line string, stdin []byte) (string, bool) {
 			out = nil
 		}
 		in = out
-		// Output redirection is only valid for the final stage of a pipeline.
-		if i < len(segments)-1 && outputPath != "" {
-			return "", false
-		}
 	}
 	return string(in), true
 }
@@ -204,7 +203,7 @@ func phase7RunCommand(p *process, cmd string, args []string, stdin []byte) ([]by
 			return nil, false
 		}
 		pid, err := strconv.Atoi(args[0])
-		if err != nil || pid <= 0 {
+		if err != nil || pid < 0 {
 			return nil, false
 		}
 		if sysKill(p, pid) == syscallError {
